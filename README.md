@@ -1,2 +1,2 @@
-# legendary-system
-Orgenize my university projects in github
+# cs231n
+Morphius Team Training
