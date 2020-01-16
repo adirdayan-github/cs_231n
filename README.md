@@ -1,2 +1,2 @@
-# cs231n
+# cs_231n
 Morphius Team Training
