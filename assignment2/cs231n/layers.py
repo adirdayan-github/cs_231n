@@ -201,8 +201,11 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         mini_batch_var = np.std(x, axis=0, keepdims=True) ** 2
         running_mean = momentum * running_mean + (1 - momentum) * mini_batch_mean
         running_var = momentum * running_var + (1 - momentum) * mini_batch_var
-        x_norm = (x - mini_batch_mean) / np.sqrt(mini_batch_var + eps)
+        s = x - mini_batch_mean
+        sigma_b = np.sqrt(mini_batch_var + eps)
+        x_norm = s / sigma_b
         out = gamma * x_norm + beta
+        cache = (x_norm, sigma_b, s, gamma)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -260,20 +263,20 @@ def batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    q, sigma_b, s = cache('q'), cache('sigma_b'), cache('s')
+    q, sigma_b, s, gamma = cache
+    sigma_b = sigma_b.squeeze()
 
     dbeta = np.sum(dout, axis=0)  # (D,)
     dgamma = np.sum(dout * q, axis=0)  # (D,) # q = x_norm
 
     N = dout.shape[0]
     dq = gamma * dout  # (N, D)
-    dsigma_b = (-1 / sigma_b ** 2) * np.sum(s * dq, axis=0)  # (D,)
-    dsigma_b_squared = dsigma_b / 2 * sigma_b  # (D,) # dsigma_b / 2*sqrt(sigma_b_squared)
+    dsigma_b = (-1 / (sigma_b ** 2)) * np.sum(s * dq, axis=0)  # (D,)
+    dsigma_b_squared = dsigma_b / (2 * sigma_b)  # (D,) # dsigma_b / 2*sqrt(sigma_b_squared)
     dt = np.ones((N, 1)) * (dsigma_b_squared / N)[np.newaxis, :]  # (N, D) # broadcasting
     ds = 2 * s * dt + dq / sigma_b  # (N, D)
     dmiu_b = (-1) * np.sum(ds, axis=0)  # (D,)
     dx = ds + np.ones((N, 1)) * (dmiu_b / N)[np.newaxis, :]  # (N, D) # broadcasting
-
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -308,7 +311,15 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    q, sigma_b, s, gamma = cache
+    sigma_b = sigma_b.squeeze()
+
+    dbeta = dout.sum(axis=0)
+    dgamma = np.sum(dout * q, axis=0)
+
+    N = dout.shape[0]
+    dq = dout * gamma  # (N, D)
+    dx = (N * dq - np.sum(dq, axis=0) - q * np.sum(dq * q, axis=0)) / (N * sigma_b)  # (N, D)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -723,7 +734,7 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     - cache: Values needed for the backward pass
     """
     out, cache = None, None
-    eps = gn_param.get('eps',1e-5)
+    eps = gn_param.get('eps', 1e-5)
     ###########################################################################
     # TODO: Implement the forward pass for spatial group normalization.       #
     # This will be extremely similar to the layer norm implementation.        #
