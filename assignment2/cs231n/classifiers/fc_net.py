@@ -9,6 +9,13 @@ from cs231n.layer_utils import affine_relu_forward, affine_relu_backward
 from cs231n.layers import affine_forward, affine_backward, softmax_loss
 
 
+# from assignment2.cs231n.layers import *
+# from assignment2.cs231n.layer_utils import *
+#
+# from assignment2.cs231n.layer_utils import affine_relu_forward, affine_relu_backward
+# from assignment2.cs231n.layers import affine_forward, affine_backward, softmax_loss
+
+
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network with ReLU nonlinearity and
@@ -197,9 +204,12 @@ class FullyConnectedNet(object):
 
         layers_dims = np.hstack([input_dim, hidden_dims, num_classes])
         for i in range(self.num_layers):
-            self.params[f'W{i+1}'] = np.random.normal(0, weight_scale,
-                                                                     (layers_dims[i], layers_dims[i + 1]))
-            self.params[f'b{i+1}'] = np.zeros(layers_dims[i + 1])
+            self.params[f'W{i + 1}'] = np.random.normal(0, weight_scale, (layers_dims[i], layers_dims[i + 1]))
+            self.params[f'b{i + 1}'] = np.zeros(layers_dims[i + 1])
+        if self.normalization is not None:
+            for i in range(self.num_layers - 1):
+                self.params[f'gamma{i + 1}'] = np.ones(layers_dims[i + 1])
+                self.params[f'beta{i + 1}'] = np.zeros(layers_dims[i + 1])
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -261,16 +271,25 @@ class FullyConnectedNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        x = X
         caches = []
-        for i in range(self.num_layers - 1):
-            w = self.params[f'W{i + 1}']
-            b = self.params[f'b{i + 1}']
-            x, cache = affine_relu_forward(x, w, b)
-            caches.append(cache)
+        if self.normalization is None:
+            for i in range(self.num_layers - 1):
+                w = self.params[f'W{i + 1}']
+                b = self.params[f'b{i + 1}']
+                X, cache = affine_relu_forward(X, w, b)
+                caches.append(cache)
+        else:
+            for i in range(self.num_layers - 1):
+                w = self.params[f'W{i + 1}']
+                b = self.params[f'b{i + 1}']
+                gamma = self.params[f'gamma{i + 1}']
+                beta = self.params[f'beta{i + 1}']
+                bn_param = self.bn_params[i]
+                X, cache = affine_batchnorm_relu_forward(X, w, b, gamma, beta, bn_param)
+                caches.append(cache)
         w = self.params[f'W{self.num_layers}']
         b = self.params[f'b{self.num_layers}']
-        scores, cache = affine_forward(x, w, b)
+        scores, cache = affine_forward(X, w, b)
         caches.append(cache)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -309,11 +328,20 @@ class FullyConnectedNet(object):
         grads[f'W{self.num_layers}'] = dw + self.reg * self.params[f'W{self.num_layers}']
         grads[f'b{self.num_layers}'] = db
 
-        for i in range(self.num_layers - 2, -1, -1):
-            dx, dw, db = affine_relu_backward(dout, caches[i])
-            grads[f'W{i + 1}'] = dw + self.reg * self.params[f'W{i + 1}']
-            grads[f'b{i + 1}'] = db
-            dout = np.copy(dx)
+        if self.normalization is None:
+            for i in range(self.num_layers - 2, -1, -1):
+                dx, dw, db = affine_relu_backward(dout, caches[i])
+                grads[f'W{i + 1}'] = dw + self.reg * self.params[f'W{i + 1}']
+                grads[f'b{i + 1}'] = db
+                dout = np.copy(dx)
+        else:
+            for i in range(self.num_layers - 2, -1, -1):
+                dx, dw, db, dgamma, dbeta = affine_batchnorm_relu_backward(dout, caches[i])
+                grads[f'W{i + 1}'] = dw + self.reg * self.params[f'W{i + 1}']
+                grads[f'b{i + 1}'] = db
+                dout = np.copy(dx)
+                grads[f'gamma{i + 1}'] = dgamma
+                grads[f'beta{i + 1}'] = dbeta
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

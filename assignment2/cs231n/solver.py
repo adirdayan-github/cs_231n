@@ -183,6 +183,8 @@ class Solver(object):
         self.loss_history.append(loss)
 
         # Perform a parameter update
+        # print(list(grads.keys()))
+        # print(list(self.model.params.keys()))
         for p, w in self.model.params.items():
             dw = grads[p]
             config = self.optim_configs[p]

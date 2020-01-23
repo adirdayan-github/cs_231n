@@ -1,6 +1,10 @@
 from cs231n.layers import *
 from cs231n.fast_layers import *
 
+# from assignment2.cs231n.layers import *
+# from assignment2.cs231n.fast_layers import *
+
+
 
 def affine_relu_forward(x, w, b):
     """
@@ -28,6 +32,50 @@ def affine_relu_backward(dout, cache):
     da = relu_backward(dout, relu_cache)
     dx, dw, db = affine_backward(da, fc_cache)
     return dx, dw, db
+
+
+def affine_norm_relu_forward(x, w, b, gamma, beta, param, which_norm):
+    """
+    Convenience layer that perorms an affine transform followed by batchnormfollowed by a ReLU
+
+    Inputs:
+    - x: Input to the affine layer
+    - w, b: Weights for the affine layer
+    - gamma, beta: scale and shift parameters for batch norm.
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    """
+    fc_res, fc_cache = affine_forward(x, w, b)
+    norm_func = get_norm_func('forward', which_norm)
+    bn_res, bn_cache = norm_func(fc_res, gamma, beta, param)
+    out, relu_cache = relu_forward(bn_res)
+    cache = (fc_cache, bn_cache, relu_cache)
+    return out, cache
+
+def get_norm_func(direction, which_norm):
+    if direction == 'forward' and which_norm == 'batchnorm':
+        return batchnorm_forward
+    if direction == 'forward' and which_norm == 'layernorm':
+        return layernorm_forward
+    if direction == 'backward' and which_norm == 'batchnorm':
+        return batchnorm_backward_alt
+    if direction == 'backward' and which_norm == 'layernorm':
+        return layernorm_backward
+    print('there is a bug you should not be here!')
+
+
+def affine_norm_relu_backward(dout, cache):
+    """
+    Backward pass for the affine-batchnorm-relu convenience layer
+    """
+    fc_cache, bn_cache, relu_cache = cache
+    dbn = relu_backward(dout, relu_cache)
+    norm_func = get_norm_func('backward', which_norm)
+    daffine, dgamma, dbeta = norm_func(dbn, bn_cache)
+    dx, dw, db = affine_backward(daffine, fc_cache)
+    return dx, dw, db, dgamma, dbeta
 
 
 def conv_relu_forward(x, w, b, conv_param):
