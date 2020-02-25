@@ -1,5 +1,6 @@
 from builtins import range
 import numpy as np
+from itertools import product
 
 
 def affine_forward(x, w, b):
@@ -544,9 +545,19 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    pad, stride = conv_param['pad'], conv_param['stride']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    H_tag, W_tag = int(1 + (H + 2 * pad - HH) / stride), int(1 + (W + 2 * pad - WW) / stride)
+    out = np.empty((N, F, H_tag, W_tag))
 
-    # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    padded_x = np.pad(x, [[0, 0], [0, 0], [pad, pad], [pad, pad]], 'constant')
+    for i in range(H_tag):
+        for j in range(W_tag):
+            slice = padded_x[:, :, stride * i: HH + stride * i, stride * j: WW + stride * j]  # shape = (N, C, HH, WW)
+            out[:, :, i, j] = np.dot(slice.reshape([N, C * HH * WW]), w.reshape(F, C * HH * WW).T) + b
+
+            # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -573,7 +584,21 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, w, b, conv_param = cache
+    dw, db = np.zeros_like(w), np.zeros_like(b)
+    pad, stride = conv_param['pad'], conv_param['stride']
+    F, C, HH, WW = w.shape
+    N, F, H_tag, W_tag = dout.shape
+    padded_x = np.pad(x, [[0, 0], [0, 0], [pad, pad], [pad, pad]], 'constant')
+    padded_dx = np.zeros_like(padded_x)
+
+    for i, j in product(range(H_tag), range(W_tag)):
+        slice = padded_x[:, :, stride * i: HH + stride * i, stride * j: WW + stride * j]  # shape = (N, C, HH, WW)
+        dslice = dout[:, :, i, j]
+        padded_dx[:, :, stride * i: HH + stride * i, stride * j: WW + stride * j] += np.tensordot(dslice, w, (1, 0))
+        dw += np.tensordot(dslice.T, slice, (1, 0))
+        db += np.sum(dslice, axis=0)
+    dx = padded_dx[:, :, pad: -pad, pad: -pad]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
