@@ -74,7 +74,6 @@ class CaptioningRNN(object):
         for k, v in self.params.items():
             self.params[k] = v.astype(self.dtype)
 
-
     def loss(self, features, captions):
         """
         Compute training-time loss for the RNN. We input image features and
@@ -142,15 +141,29 @@ class CaptioningRNN(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        h0, cache_proj = affine_forward(features, W_proj, b_proj)
+        res_emb, cache_emb = word_embedding_forward(captions_in, W_embed)
+        if self.cell_type == 'rnn':
+            h, cache_rnn = rnn_forward(res_emb, h0, Wx, Wh, b)
+        else:
+            h, cache_lstm = lstm_forward(res_emb, h0, Wx, Wh, b)
+        scores, cache_temp = temporal_affine_forward(h, W_vocab, b_vocab)
+        loss, dout = temporal_softmax_loss(scores, captions_out, mask, verbose=False)
+        dh, dW_vocab, db_vocab = temporal_affine_backward(dout, cache_temp)
+        if self.cell_type == 'rnn':
+            dres_emb, dh0, dWx, dWh, db = rnn_backward(dh, cache_rnn)
+        else:
+            dres_emb, dh0, dWx, dWh, db = lstm_backward(dh, cache_lstm)
+        dW_embed = word_embedding_backward(dres_emb, cache_emb)
+        dfeatures, dW_proj, db_proj = affine_backward(dh0, cache_proj)
+        grads = {'W_vocab': dW_vocab, 'b_vocab': db_vocab, 'Wx': dWx, 'Wh': dWh,
+                 'b': db, 'W_embed': dW_embed, 'W_proj': dW_proj, 'b_proj': db_proj}
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
-
         return loss, grads
-
 
     def sample(self, features, max_length=30):
         """
@@ -211,7 +224,20 @@ class CaptioningRNN(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        h0, cache_proj = affine_forward(features, W_proj, b_proj)
+        Mh = h0
+        Mx = (self._start * np.ones(N)).astype(np.int)
+        Mx, Mcache = word_embedding_forward(Mx, W_embed)
+        Mc = np.zeros_like(Mh)
+        for t in range(max_length):
+            if self.cell_type == 'rnn':
+                Mh, Mcache = rnn_step_forward(Mx, Mh, Wx, Wh, b)
+            else:
+                Mh, Mc, Mcache = lstm_step_forward(Mx, Mh, Mc, Wx, Wh, b)
+            scores, Mcache = affine_forward(Mh, W_vocab, b_vocab)
+            Mx = np.argmax(scores, axis=1)
+            captions[:, t] = Mx
+            Mx, Mcache = word_embedding_forward(Mx, W_embed)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
